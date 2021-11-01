@@ -1,93 +1,66 @@
-# ASP.NET Core (.NET Framework)
-# Build and test ASP.NET Core projects targeting the full .NET Framework.
-# Add steps that publish symbols, save build artifacts, and more:
-# https://docs.microsoft.com/azure/devops/pipelines/languages/dotnet-core
-
 trigger:
 - '*'
 
-pool:
-  vmImage: 'ubuntu-20.04'
-  demands:
-  - npm
-
 variables:
   buildConfiguration: 'Release'
-  wwwrootDir: 'Tailspin.SpaceGame.Web/wwwroot'
-  dotnetSdkVersion: '5.x'
 
-steps:
-- task: UseDotNet@2
-  displayName: 'Use .NET SDK $(dotnetSdkVersion)'
-  inputs:
-    packageType: sdk
-    version: '$(dotnetSdkVersion)'
+stages:
+- stage: 'Build'
+  displayName: 'Build the web application'
+  jobs: 
+  - job: 'Build'
+    displayName: 'Build job'
+    pool:
+      vmImage: 'ubuntu-20.04'
+      demands:
+      - npm
 
-- task: Npm@1
-  displayName: 'Run npm install'
-  inputs:
-    verbose: false
+    variables:
+      wwwrootDir: 'Tailspin.SpaceGame.Web/wwwroot'
+      dotnetSdkVersion: '5.x'
 
-- script: './node_modules/.bin/node-sass $(wwwrootDir) --output $(wwwrootDir)'
-  displayName: 'Compile Sass assets'
+    steps:
+    - task: UseDotNet@2
+      displayName: 'Use .NET SDK $(dotnetSdkVersion)'
+      inputs:
+        version: '$(dotnetSdkVersion)'
 
-- task: gulp@1
-  displayName: 'Run gulp tasks'
+    - task: Npm@1
+      displayName: 'Run npm install'
+      inputs:
+        verbose: false
 
-- script: 'echo "$(Build.DefinitionName), $(Build.BuildId), $(Build.BuildNumber)" > buildinfo.txt'
-  displayName: 'Write build info'
-  workingDirectory: $(wwwrootDir)
+    - script: './node_modules/.bin/node-sass $(wwwrootDir) --output $(wwwrootDir)'
+      displayName: 'Compile Sass assets'
 
-- task: DotNetCoreCLI@2
-  displayName: 'Restore project dependencies'
-  inputs:
-    command: 'restore'
-    projects: '**/*.csproj'
+    - task: gulp@1
+      displayName: 'Run gulp tasks'
 
-# Replaced by template templates/build.yml
-# - task: DotNetCoreCLI@2
-#   displayName: 'Build the project - $(buildConfiguration)'
-#   inputs:
-#     command: 'build'
-#     arguments: '--no-restore --configuration $(buildConfiguration)'
-#     projects: '**/*.csproj'
+    - script: 'echo "$(Build.DefinitionName), $(Build.BuildId), $(Build.BuildNumber)" > buildinfo.txt'
+      displayName: 'Write build info'
+      workingDirectory: $(wwwrootDir)
 
-- template: templates/build.yml
-  parameters:
-    buildConfiguration: 'Debug'
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore project dependencies'
+      inputs:
+        command: 'restore'
+        projects: '**/*.csproj'
 
-# The first task uses the DotNetCoreCLI@2 task to publish, or package, the app's build results (including its dependencies) into a folder. The zipAfterPublish argument 
-# specifies to add the built results to a .zip file.
+    - task: DotNetCoreCLI@2
+      displayName: 'Build the project - $(buildConfiguration)'
+      inputs:
+        command: 'build'
+        arguments: '--no-restore --configuration $(buildConfiguration)'
+        projects: '**/*.csproj'
 
-# The second task uses the PublishBuildArtifacts@1 task to publish the .zip file to Azure Pipelines. The condition argument specifies to run the task only when the 
-# previous task succeeds. succeeded() is the default condition, so you don't need to specify it. But we show it here to show its use.
+    - task: DotNetCoreCLI@2
+      displayName: 'Publish the project - $(buildConfiguration)'
+      inputs:
+        command: 'publish'
+        projects: '**/*.csproj'
+        publishWebProjects: false
+        arguments: '--no-build --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/$(buildConfiguration)'
+        zipAfterPublish: true
 
-# Replaced by template templates/build.yml
-# - task: DotNetCoreCLI@2
-#   displayName: 'Publish the project - $(buildConfiguration)'
-#   inputs:
-#     command: 'publish'
-#     projects: '**/*.csproj'
-#     publishWebProjects: false
-#     arguments: '--no-build --configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)/$(buildConfiguration)'
-#     zipAfterPublish: true
-
-- template: templates/build.yml
-  parameters:
-    buildConfiguration: 'Release'
-    
-- task: PublishBuildArtifacts@1
-  displayName: 'Publish Artifact: drop'
-  condition: succeeded()
-
-
-# The demands section beneath pool specifies that you need npm, the Node.js package manager, installed on the build system.
-
-# Under the steps section, you see the build tasks that maps to each of the script commands that we identified earlier.
-
-# Remember that not all build activities map to a built-in task. For example, there's no built-in task that runs the 
-# node-Sass utility, or writes build info to a text file. To run general system commands, you use the CmdLine@2 or script task. 
-# The pipeline uses the script task because it's a common shortcut for CmdLine@2.
-
-
-
+    - publish: '$(Build.ArtifactStagingDirectory)'
+      artifact: drop
